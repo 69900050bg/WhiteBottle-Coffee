@@ -1,0 +1,163 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>WhiteBottle Spider Chart</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: radar chart left, store list with raw figures right; presets above. Hover or tap a store to isolate its shape. */
+:root{
+  --bg:#f6f6f4; --surface:#fcfcfb; --ink:#161615; --ink2:#52514e; --ink3:#7b7a75; --line:#e3e2dd; --grid:#e6e5e0;
+  --A:#eda100; --B:#e87ba4; --C:#008300; --D:#4a3aa7; --E:#2a78d6; --F:#e34948; --G:#1baf7a; --H:#eb6834;
+  --font:'IBM Plex Sans',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121211; --surface:#1a1a19; --ink:#f4f4f1; --ink2:#c3c2b7; --ink3:#8f8e86; --line:#2d2d2b; --grid:#2e2e2b;
+  --A:#c98500; --B:#d55181; --C:#2f9e2f; --D:#9085e9; --E:#3987e5; --F:#e66767; --G:#199e70; --H:#d95926; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121211; --surface:#1a1a19; --ink:#f4f4f1; --ink2:#c3c2b7; --ink3:#8f8e86; --line:#2d2d2b; --grid:#2e2e2b;
+  --A:#c98500; --B:#d55181; --C:#2f9e2f; --D:#9085e9; --E:#3987e5; --F:#e66767; --G:#199e70; --H:#d95926; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.45;padding-inline:20px;padding-block:20px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-size:22px;font-weight:600;margin:0;letter-spacing:-.01em}
+.sub,.note{color:var(--ink2);margin:2px 0 0}
+.note{font-size:13px}
+.bar{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center}
+.seg{display:flex;flex-wrap:wrap;gap:8px}
+.seg button,.tog{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 14px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.seg button:focus-visible,.tog:focus-within,.row:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.tog{display:inline-flex;gap:8px;align-items:center}
+.tog input{accent-color:var(--ink)}
+.main{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);gap:16px}
+@media(max-width:860px){.main{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px;min-width:0}
+svg{display:block;width:100%;height:auto;overflow:visible}
+svg text{font-family:var(--font);fill:var(--ink2);font-size:14px}
+svg .ax{fill:var(--ink);font-weight:600;font-size:15px}
+svg .rg{fill:var(--ink3);font-size:11px}
+svg .poly{transition:opacity .15s}
+svg.hovering .poly:not(.hov){opacity:.12}
+svg.hovering .vx:not(.hov){opacity:.12}
+.vx{cursor:pointer}
+.list{display:flex;flex-direction:column}
+.list h2{font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink2);margin:4px 6px 8px;font-weight:600}
+.row{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;padding:8px 8px;border-radius:6px;cursor:pointer;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}
+.row:hover,.row.hov{background:var(--bg)}
+.row[aria-pressed="false"]{opacity:.45}
+.row svg{width:44px;height:14px;margin-top:5px}
+.row .nm{font-weight:600}
+.row .fg{grid-column:2;color:var(--ink2);font-size:12px;font-variant-numeric:tabular-nums}
+.row .tag{font-weight:400;color:var(--ink2)}
+#tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:6px;padding:8px 10px;font-size:12px;line-height:1.5;z-index:10;display:none;max-width:260px;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+#tip .r{display:flex;justify-content:space-between;gap:16px;font-variant-numeric:tabular-nums}
+</style>
+
+<div class="wrap">
+  <div>
+    <h1>WhiteBottle Spider Chart</h1>
+    <p class="sub">Seven metrics, eight stores. Outward means a higher observed value. Hover a store to isolate it, click to show or hide it.</p>
+  </div>
+
+  <div class="bar">
+    <div class="seg" id="presets" role="group" aria-label="Quick views"></div>
+    <label class="tog"><input type="checkbox" id="flip"> Flip complaints so outward = fewer</label>
+  </div>
+
+  <div class="main">
+    <div class="card"><svg id="sp" viewBox="0 20 720 580" role="img" aria-label="Spider chart of store metrics"></svg></div>
+    <div class="card list" id="list"></div>
+  </div>
+
+  <p class="note">Each axis runs from 0 (lowest store) to 100 (highest store) across all eight stores, so shapes show where a store sits relative to the others, not an overall score. Complaints are shown per 1,000 transactions; higher means worse service, and promotion spend is a cost, so a larger shape is not a better store. Hover a dot to see the actual value.</p>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+const RAW=[["A","Mall",1250,11800,106,62,4.5,18,150],["B","Office",1120,14500,77,48,4.2,24,120],["C","Community",860,7900,109,68,4.6,10,70],["D","Transit",980,13600,72,35,3.8,42,135],["E","Mall",1320,12100,109,55,3.5,58,185],["F","Office",940,10200,92,61,4.4,14,95],["G","Community",760,6500,117,72,4.7,8,55],["H","Transit",1010,14900,68,32,3.7,47,160]];
+const S=RAW.map(r=>({store:r[0],loc:r[1],sales:r[2],tx:r[3],basket:r[4],repeat:r[5],rating:r[6],complaints:r[7],promo:r[8]}));
+S.forEach(s=>s.cpk=s.complaints/s.tx*1000);
+const IDS=S.map(s=>s.store),get=k=>S.find(s=>s.store===k);
+const AX=[
+ {k:"sales",n:"Monthly sales",u:"THB ’000",f:v=>v.toLocaleString()},
+ {k:"tx",n:"Transactions",u:"per month",f:v=>v.toLocaleString()},
+ {k:"basket",n:"Average basket",u:"THB",f:v=>v},
+ {k:"repeat",n:"Repeat-customer rate",u:"%",f:v=>v+"%"},
+ {k:"rating",n:"Customer rating",u:"/ 5",f:v=>v.toFixed(1)},
+ {k:"cpk",n:"Complaints per 1,000",u:"higher is worse",f:v=>v.toFixed(2)},
+ {k:"promo",n:"Promotion spending",u:"THB ’000",f:v=>v}];
+AX.forEach(a=>{const v=S.map(s=>s[a.k]);a.lo=Math.min(...v);a.hi=Math.max(...v)});
+const DASH={E:"",G:"",H:"",A:"7 4",B:"2 3",C:"10 4 2 4",D:"4 4",F:"1 4"};
+const PRE=[["E · G · H","case",["E","G","H"]],["Mall: A vs E","m",["A","E"]],["Community: C vs G","c",["C","G"]],["Transit: D vs H","t",["D","H"]],["All 8 stores","all",IDS]];
+const st={on:new Set(["E","G","H"]),hover:null,flip:false,pre:"case"};
+const $=id=>document.getElementById(id);
+const score=(s,a)=>{let v=(s[a.k]-a.lo)/(a.hi-a.lo)*100;if(st.flip&&a.k==="cpk")v=100-v;return v};
+const rank=(s,a)=>[...S].sort((p,q)=>q[a.k]-p[a.k]).findIndex(x=>x.store===s.store)+1;
+const CX=360,CY=300,R=200,N=AX.length;
+const ang=i=>-Math.PI/2+i*2*Math.PI/N;
+const P=(i,v)=>[CX+Math.cos(ang(i))*R*v/100,CY+Math.sin(ang(i))*R*v/100];
+
+const tip=$("tip");
+function showTip(ev,h){tip.innerHTML=h;tip.style.display="block";const w=tip.offsetWidth,hh=tip.offsetHeight;let x=ev.clientX+14,y=ev.clientY+14;if(x+w>innerWidth-8)x=ev.clientX-w-14;if(y+hh>innerHeight-8)y=ev.clientY-hh-14;tip.style.left=Math.max(8,x)+"px";tip.style.top=Math.max(8,y)+"px"}
+const hideTip=()=>tip.style.display="none";
+
+function setHover(id){
+  st.hover=id;
+  const svg=$("sp");svg.classList.toggle("hovering",!!id);
+  document.querySelectorAll("[data-s]").forEach(n=>n.classList.toggle("hov",n.dataset.s===id));
+}
+function presets(){
+  $("presets").innerHTML=PRE.map(p=>`<button data-p="${p[1]}" aria-pressed="${st.pre===p[1]}">${p[0]}</button>`).join("");
+  $("presets").querySelectorAll("button").forEach(b=>b.onclick=()=>{const p=PRE.find(x=>x[1]===b.dataset.p);st.on=new Set(p[2]);st.pre=p[1];draw()});
+}
+function chart(){
+  const a=IDS.filter(i=>st.on.has(i)).map(get);
+  let g="";
+  [25,50,75,100].forEach(v=>{g+=`<polygon points="${AX.map((_,i)=>P(i,v).join(",")).join(" ")}" fill="none" stroke="var(--grid)"/>`;g+=`<text class="rg" x="${CX+6}" y="${CY-R*v/100+11}">${v}</text>`});
+  AX.forEach((ax,i)=>{
+    const [x,y]=P(i,100),[lx,ly]=P(i,126),c=Math.cos(ang(i)),anchor=Math.abs(c)<.3?"middle":c>0?"start":"end";
+    g+=`<line x1="${CX}" y1="${CY}" x2="${x}" y2="${y}" stroke="var(--grid)"/>`;
+    const flipped=st.flip&&ax.k==="cpk";
+    g+=`<text class="ax" x="${lx}" y="${ly}" text-anchor="${anchor}">${ax.n}</text><text x="${lx}" y="${ly+18}" text-anchor="${anchor}">${ax.lo<10?ax.lo.toFixed(2):ax.lo.toLocaleString()}–${ax.hi<10?ax.hi.toFixed(2):ax.hi.toLocaleString()}${flipped?" · flipped":""}</text><text x="${lx}" y="${ly+34}" text-anchor="${anchor}" style="font-size:12px;fill:var(--ink3)">${ax.u}</text>`;
+  });
+  const sel=a.length<=3;
+  a.forEach(s=>{
+    const pts=AX.map((ax,i)=>P(i,score(s,ax)).join(",")).join(" ");
+    g+=`<g class="poly" data-s="${s.store}"><polygon points="${pts}" fill="var(--${s.store})" fill-opacity="${sel?.12:.04}" stroke="var(--${s.store})" stroke-width="${["E","G","H"].includes(s.store)?3:2}" stroke-dasharray="${DASH[s.store]}" stroke-linejoin="round"/>
+      <polygon class="hit" points="${pts}" fill="none" stroke="transparent" stroke-width="14"/></g>`;
+  });
+  a.forEach(s=>{
+    AX.forEach((ax,i)=>{const [x,y]=P(i,score(s,ax));
+      g+=`<g class="vx" data-s="${s.store}" data-i="${i}"><circle cx="${x}" cy="${y}" r="14" fill="transparent"/><circle cx="${x}" cy="${y}" r="4.5" fill="var(--${s.store})" stroke="var(--surface)" stroke-width="1.5"/></g>`});
+    const [x,y]=P(0,score(s,AX[0]));
+  });
+  $("sp").innerHTML=g;
+  $("sp").querySelectorAll(".poly").forEach(n=>{
+    const s=get(n.dataset.s);
+    n.onmouseenter=()=>setHover(s.store);n.onmouseleave=()=>{setHover(null);hideTip()};
+    n.onmousemove=e=>showTip(e,`<b>Store ${s.store}</b> · ${s.loc}`);
+  });
+  $("sp").querySelectorAll(".vx").forEach(n=>{
+    const s=get(n.dataset.s),ax=AX[+n.dataset.i];
+    n.onmouseenter=()=>setHover(s.store);
+    n.onmousemove=e=>showTip(e,`<b>Store ${s.store}</b> · ${s.loc}<div class="r"><span>${ax.n}</span><span>${ax.f(s[ax.k])}</span></div><div class="r"><span>Scale position</span><span>${Math.round(score(s,ax))} / 100</span></div><div class="r"><span>Rank (1 = highest value)</span><span>${rank(s,ax)} of 8</span></div>`);
+    n.onmouseleave=()=>{setHover(null);hideTip()};
+  });
+}
+function list(){
+  const sw=id=>`<svg viewBox="0 0 44 14"><line x1="2" x2="42" y1="7" y2="7" stroke="var(--${id})" stroke-width="3" stroke-dasharray="${DASH[id]}" stroke-linecap="round"/><circle cx="22" cy="7" r="4" fill="var(--${id})"/></svg>`;
+  $("list").innerHTML=`<h2>Stores and raw figures</h2>`+S.map(s=>`<div class="row" data-s="${s.store}" tabindex="0" role="button" aria-pressed="${st.on.has(s.store)}">${sw(s.store)}
+    <div class="nm">Store ${s.store} <span class="tag">· ${s.loc}</span></div>
+    <div class="fg">Sales ${s.sales.toLocaleString()}k · Transactions ${s.tx.toLocaleString()} · Basket THB ${s.basket}<br>Repeat ${s.repeat}% · Rating ${s.rating.toFixed(1)} · Complaints/1k ${s.cpk.toFixed(2)} · Promo ${s.promo}k</div></div>`).join("");
+  $("list").querySelectorAll(".row").forEach(r=>{
+    const id=r.dataset.s;
+    r.onmouseenter=()=>setHover(st.on.has(id)?id:null);r.onmouseleave=()=>setHover(null);
+    const toggle=()=>{st.on.has(id)?st.on.delete(id):st.on.add(id);if(!st.on.size)st.on.add(id);st.pre="";draw()};
+    r.onclick=toggle;r.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle()}};
+  });
+}
+$("flip").onchange=e=>{st.flip=e.target.checked;draw()};
+function draw(){presets();chart();list();setHover(null)}
+draw();
+</script>
+
+</body></html>
